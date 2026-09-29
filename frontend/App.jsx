@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Check, Leaf, Mountain, Waves, TreePine, Settings, Play, Pause, RotateCcw, SkipForward, X, Volume2, LogOut, AlertCircle, ChevronDown, ChevronRight, Flame, Target } from 'lucide-react'
 import forest from './assets/forest-reference.png'
 import mountain from './assets/mountain-scene.jpg'
@@ -61,6 +61,24 @@ function formatLocalDateTime(date) {
   return date.toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
 }
 
+// Strips #tags and collapses whitespace so "Reviewing PRs #work" and
+// "reviewing   prs" are recognized as the same task.
+function normalizeTaskName(rawTask) {
+  return (rawTask || '')
+    .replace(/#[\w-]+/g, '')
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, ' ')
+}
+
+function todayLocalDateStr() {
+  const d = new Date()
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${y}-${m}-${day}`
+}
+
 export default function App() {
   const [scene, setScene] = useState(() => read('rf-scene', 'forest'))
   const [mode, setMode] = useState('focus')
@@ -92,6 +110,16 @@ export default function App() {
   const [sessions, setSessions] = useState([])
   const [expandedRow, setExpandedRow] = useState(null)
   const [rowInterruptions, setRowInterruptions] = useState({})
+
+  // Warn (non-blocking) if today already has a logged session under this
+  // same task name, so accidental re-entry or forgotten context is caught
+  // before the timer starts.
+  const duplicateTaskToday = useMemo(() => {
+    const normalized = normalizeTaskName(task)
+    if (!normalized) return false
+    const today = todayLocalDateStr()
+    return sessions.some(s => s.date === today && normalizeTaskName(s.task_name) === normalized)
+  }, [task, sessions])
 
   const [dailyAnalytics, setDailyAnalytics] = useState([])
   const [heatmapData, setHeatmapData] = useState(Array(24).fill(0))
@@ -829,7 +857,13 @@ export default function App() {
             value={task}
             onChange={event => setTask(event.target.value)}
             placeholder="E.g., Reviewing PRs #work #code"
+            aria-describedby={duplicateTaskToday ? 'duplicate-task-warning' : undefined}
           />
+          {duplicateTaskToday && (
+            <span className="focus-input-warning" id="duplicate-task-warning" role="status">
+              <AlertCircle size={12}/> You already logged "{task.replace(/#[\w-]+/g, '').trim()}" today
+            </span>
+          )}
         </div>
       </section>
 
