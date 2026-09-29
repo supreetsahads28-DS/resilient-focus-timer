@@ -111,7 +111,10 @@ def test_fresh_db_migrate_and_full_lifecycle(monkeypatch):
                 assert 'status' in s
 
             # 4. All /analytics endpoints: call with no errors, correct minutes
-            today = datetime.now().date()
+            # Analytics buckets by IST (see app.IST_TZ), not local/UTC "today" —
+            # use the app's own timezone constant so this test agrees with the
+            # app on what day it is, even when run near the UTC/IST boundary.
+            today = datetime.now(app_mod.IST_TZ).date()
             yest = today - timedelta(days=6)
             r = c.get(f'/analytics/daily?start={yest}&end={today}')
             assert r.status_code == 200, r.get_data(as_text=True)
