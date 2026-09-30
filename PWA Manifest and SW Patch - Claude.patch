@@ -1,0 +1,61 @@
+diff --git a/app.py b/app.py
+index ca406c3..011939c 100644
+--- a/app.py
++++ b/app.py
+@@ -775,6 +775,31 @@ def render_react():
+ def serve_assets(filename):
+     return send_from_directory(os.path.join(BASE_DIR, 'frontend', 'dist', 'assets'), filename)
+ 
++@app.route('/manifest.webmanifest')
++def serve_manifest():
++    return send_from_directory(
++        os.path.join(BASE_DIR, 'frontend', 'dist'),
++        'manifest.webmanifest',
++        mimetype='application/manifest+json'
++    )
++
++@app.route('/sw.js')
++def serve_service_worker():
++    response = make_response(send_from_directory(
++        os.path.join(BASE_DIR, 'frontend', 'dist'),
++        'sw.js',
++        mimetype='application/javascript'
++    ))
++    # Never let a stale service worker script get cached — browsers already
++    # re-check it on every navigation, but an intermediary cache could hide
++    # updates for a long time otherwise.
++    response.headers['Cache-Control'] = 'no-cache'
++    return response
++
++@app.route('/icons/<path:filename>')
++def serve_icons(filename):
++    return send_from_directory(os.path.join(BASE_DIR, 'frontend', 'dist', 'icons'), filename)
++
+ @app.route('/history')
+ def history():
+     return render_react()
+diff --git a/frontend/index.html b/frontend/index.html
+index c2e7da6..a2dc60b 100644
+--- a/frontend/index.html
++++ b/frontend/index.html
+@@ -1 +1 @@
+-<!doctype html><html lang="en"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/><meta name="theme-color" content="#0b1716"/><title>Resilient Focus</title></head><body><div id="root"></div><script type="module" src="/main.jsx"></script></body></html>
++<!doctype html><html lang="en"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/><meta name="theme-color" content="#0b1716"/><link rel="manifest" href="/manifest.webmanifest"/><link rel="icon" href="/icons/icon-192.png"/><link rel="apple-touch-icon" href="/icons/apple-touch-icon.png"/><title>Resilient Focus</title></head><body><div id="root"></div><script type="module" src="/main.jsx"></script></body></html>
+diff --git a/frontend/main.jsx b/frontend/main.jsx
+index 6bebd93..332df60 100644
+--- a/frontend/main.jsx
++++ b/frontend/main.jsx
+@@ -3,3 +3,13 @@ import { createRoot } from 'react-dom/client'
+ import App from './App'
+ import './App.css'
+ createRoot(document.getElementById('root')).render(<React.StrictMode><App /></React.StrictMode>)
++
++// Only register in production builds: on the Vite dev server (port 5173) a
++// service worker would cache module requests and fight with hot-reloading.
++if (import.meta.env.PROD && 'serviceWorker' in navigator) {
++  window.addEventListener('load', () => {
++    navigator.serviceWorker.register('/sw.js').catch((err) => {
++      console.error('Service worker registration failed:', err);
++    });
++  });
++}
